@@ -5,4 +5,4 @@ pypdf
 langchain
 langchain-core
 python-dotenv
-pinecone-client
+pinecone
