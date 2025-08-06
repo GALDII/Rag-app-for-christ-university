@@ -1,0 +1,8 @@
+streamlit
+cohere
+groq
+pypdf
+langchain
+langchain-core
+python-dotenv
+pinecone-client
