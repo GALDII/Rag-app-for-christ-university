@@ -1,6 +1,7 @@
 from groq import Groq
 import streamlit as st
 from config.config import get_groq_api_key
+from utils.web_search import serpapi_web_search
 
 def get_groq_client():
     try:
@@ -29,7 +30,6 @@ def generate_llm_response(query, context, groq_client, response_style="Detailed"
             CONCISE ANSWER:
             """
         else:
-            # Prompt for a detailed answer
             prompt = f"""
             You are a AI assistant. Your primary task is to answer the user's question based on the provided context from the student handbook.
             If the question can be answered using the context, form your response based on it.
@@ -44,22 +44,50 @@ def generate_llm_response(query, context, groq_client, response_style="Detailed"
             DETAILED ANSWER:
             """
     else:
-        # No context found, act as a general assistant
-        prompt = f"""
-        You are a AI assistant. The user asked a question that could not be found in the student handbook.
-        Please answer the following question using your general knowledge just give note not from knowledge base.
+        with st.spinner("Couldn't find an answer in the handbook. Searching the web..."):
+            search_results = serpapi_web_search(query)
+        
+        if not search_results:
+            prompt = f"""
+            You are a AI assistant. The user asked a question that could not be found in the student handbook or via web search.
+            Please answer the following question using your general knowledge just give note not from knowledge base.
 
-        QUESTION:
-        {query}
+            QUESTION:
+            {query}
 
-        ANSWER:
-        """
+            ANSWER:
+            """
+        else:
+            if response_style == "Concise":
+                prompt = f"""
+                Answer the user's question in one concise sentence based on the following web search results.
+
+                SEARCH RESULTS:
+                {search_results}
+
+                QUESTION:
+                {query}
+
+                CONCISE ANSWER:
+                """
+            else:
+                prompt = f"""
+                You are a helpful research assistant. Answer the user's question in detail based on the following web search results. Synthesize the information into a comprehensive answer and cite the links provided.
+
+                SEARCH RESULTS:
+                {search_results}
+
+                QUESTION:
+                {query}
+
+                DETAILED ANSWER:
+                """
 
     try:
         chat_completion = groq_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama3-8b-8192",
-            temperature=0.8 if not context else 0.2,
+            temperature=0.7 if not context else 0.2,
         )
         return chat_completion.choices[0].message.content
     except Exception as e:

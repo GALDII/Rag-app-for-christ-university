@@ -6,3 +6,4 @@ langchain
 langchain-core
 python-dotenv
 pinecone
+google-search-results
