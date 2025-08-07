@@ -71,7 +71,7 @@ def main():
     """Main function to run the Streamlit app with multi-page navigation."""
     st.set_page_config(
         page_title="Handbook RAG Chat",
-        page_icon="�",
+        page_icon="📚",
         layout="wide",
         initial_sidebar_state="expanded"
     )
