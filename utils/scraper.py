@@ -5,6 +5,9 @@ import os
 import streamlit as st
 
 def perform_web_search(query: str, site_specific: bool = False, max_pages: int = 2) -> str:
+    """
+    Performs a web search, scrapes the top results, and returns the combined text content.
+    """
     search_domain = "christuniversity.in"
     if site_specific:
         search_query = f"site:{search_domain} {query}"
