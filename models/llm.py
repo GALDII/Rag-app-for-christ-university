@@ -1,7 +1,8 @@
 from groq import Groq
 import streamlit as st
-from utils.web_search import serpapi_web_search
 from config.config import get_groq_api_key
+# Make sure to import the new web search function
+from utils.scraper import perform_web_search
 
 def get_groq_client():
     try:
@@ -16,81 +17,54 @@ def get_groq_client():
 
 def generate_llm_response(chat_history, context, groq_client, response_style="Detailed"):
     query = chat_history[-1]["content"]
-
     history_str = "\n".join([f'{msg["role"].title()}: {msg["content"]}' for msg in chat_history[:-1]])
+    
+
+    if not context:
+        with st.spinner("Couldn't find an answer in the handbook. Searching christuniversity.in..."):
+            context = perform_web_search(query, site_specific=True)
+
+        if not context:
+            with st.spinner("No relevant info on the university site. Performing a general web search..."):
+                context = perform_web_search(query, site_specific=False)
 
     if context:
-        context_str = "\n\n".join(context)
-        if response_style == "Concise":
-            prompt = f"""
-            Based *only* on the following context from the student handbook, answer the user's latest question in a single, concise sentence.
+        context_str = "\n\n".join(context) if isinstance(context, list) else context
+        prompt = f"""
+        You are an AI assistant. Your task is to answer the user's latest question based on the provided context and the conversation history.
+        The context could be from a student handbook or from a web page.
+        Synthesize the information into a comprehensive answer. If the context is from a webpage, mention the source URL if available.
 
-            CONTEXT:
-            {context_str}
+        CONTEXT:
+        {context_str}
 
-            CONVERSATION HISTORY:
-            {history_str}
+        CONVERSATION HISTORY:
+        {history_str}
 
-            LATEST QUESTION:
-            {query}
+        LATEST QUESTION:
+        {query}
 
-            CONCISE ANSWER:
-            """
-        else:
-            prompt = f"""
-            You are an AI assistant. Your primary task is to answer the user's latest question based on the provided context from the student handbook and the conversation history.
-            If the question can be answered using the context, form your response based on it.
-            If the question is conversational or cannot be answered by the context, answer it using your general knowledge, but give a note like "This answer is from my general knowledge, not the handbook."
-
-            CONTEXT FROM HANDBOOK:
-            {context_str}
-
-            CONVERSATION HISTORY:
-            {history_str}
-
-            LATEST QUESTION:
-            {query}
-
-            DETAILED ANSWER:
-            """
+        DETAILED ANSWER:
+        """
     else:
-        with st.spinner("Couldn't find an answer in the handbook. Searching the web..."):
-            search_results = serpapi_web_search(query)
+        prompt = f"""
+        You are an AI assistant. The user asked a question that could not be answered from the student handbook or any web search.
+        Please answer the following question using your general knowledge, and clearly state that the information is not from an official source.
+
+        CONVERSATION HISTORY:
+        {history_str}
         
-        if not search_results:
-            prompt = f"""
-            You are an AI assistant. The user asked a question that could not be found in the student handbook or via web search.
-            Please answer the following question using your general knowledge and the conversation history. Note that the answer is not from the knowledge base.
+        QUESTION:
+        {query}
 
-            CONVERSATION HISTORY:
-            {history_str}
-            
-            QUESTION:
-            {query}
-
-            ANSWER:
-            """
-        else:
-            prompt = f"""
-            You are a helpful research assistant. Answer the user's question based on the following web search results and the conversation history. Synthesize the information into a comprehensive answer.
-
-            SEARCH RESULTS:
-            {search_results}
-
-            CONVERSATION HISTORY:
-            {history_str}
-
-            QUESTION:
-            {query}
-
-            ANSWER:
-            """
+        ANSWER (from general knowledge):
+        """
 
     try:
         chat_completion = groq_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama3-8b-8192",
-            temperature=0.7 if not context else 0.2,
+            temperature=0.5, # A bit of creativity might be needed for web results
         )
         return chat_completion.choices[0].message.content
     except Exception as e:

@@ -7,3 +7,5 @@ langchain-core
 python-dotenv
 pinecone
 google-search-results
+requests
+beautifulsoup4
