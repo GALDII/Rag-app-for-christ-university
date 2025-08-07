@@ -27,20 +27,25 @@ def generate_llm_response(chat_history, context, groq_client, cohere_client, ind
 
     # If context from the handbook is not found, start the web search process.
     if not context:
-        # First, try searching the university website
+        # Perform both searches to gather all possible information
         site_context = perform_web_search(query, site_specific=True)
+        general_web_context = perform_web_search(query, site_specific=False)
+
+        # Combine the contexts, prioritizing the general search for non-domain questions
+        final_context = ""
+        if general_web_context:
+            final_context += f"--- Context from General Web Search ---\n{general_web_context}\n\n"
+            source_note = "Source: Web Search"
         
-        # If relevant info is found on the university site, update the DB and use it
         if site_context:
+            final_context += f"--- Context from christuniversity.in ---\n{site_context}"
+            # Update the knowledge base only with relevant university info
             update_vector_store(site_context, cohere_client, index)
-            context = site_context
-            source_note = "Source: christuniversity.in"
-        # If not, perform a general web search
-        else:
-            general_web_context = perform_web_search(query, site_specific=False)
-            if general_web_context:
-                context = general_web_context
-                source_note = "Source: Web Search"
+            # If general search failed, this becomes the primary source
+            if not source_note:
+                source_note = "Source: christuniversity.in"
+
+        context = final_context if final_context else None
 
     # If context was from the original DB, set the source note.
     elif context:
