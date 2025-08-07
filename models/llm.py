@@ -24,25 +24,34 @@ def generate_llm_response(chat_history, context, groq_client, cohere_client, ind
     history_str = "\n".join([f'{msg["role"].title()}: {msg["content"]}' for msg in chat_history[:-1]])
     
     source_note = ""
-    is_web_search = False
 
+    # If context from the handbook is not found, start the web search process.
     if not context:
+        # Perform both searches to gather all possible information
         site_context = perform_web_search(query, site_specific=True)
-        if site_context:
-            update_vector_store(site_context, cohere_client, index)
-            context = site_context
-            source_note = "Source: christuniversity.in"
-            is_web_search = True
-        else:
-            general_web_context = perform_web_search(query, site_specific=False)
-            if general_web_context:
-                context = general_web_context
-                source_note = "Source: Web Search"
-                is_web_search = True
+        general_web_context = perform_web_search(query, site_specific=False)
 
-    if context and not is_web_search:
+        # Combine the contexts, prioritizing the general search for non-domain questions
+        final_context = ""
+        if general_web_context:
+            final_context += f"--- Context from General Web Search ---\n{general_web_context}\n\n"
+            source_note = "Source: Web Search"
+        
+        if site_context:
+            final_context += f"--- Context from christuniversity.in ---\n{site_context}"
+            # Update the knowledge base only with relevant university info
+            update_vector_store(site_context, cohere_client, index)
+            # If general search failed, this becomes the primary source
+            if not source_note:
+                source_note = "Source: christuniversity.in"
+
+        context = final_context if final_context else None
+
+    # If context was from the original DB, set the source note.
+    elif context:
         source_note = "Source: Student Handbook"
 
+    # Build the final prompt based on whether any context was found.
     if context:
         if isinstance(context, str):
             max_chars = 4000
@@ -66,6 +75,7 @@ def generate_llm_response(chat_history, context, groq_client, cohere_client, ind
         **ANSWER:**
         """
     else:
+        # Final fallback: General knowledge
         prompt = f"""
         **Instructions:**
         1. Answer the "LATEST QUESTION" using your general knowledge.
