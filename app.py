@@ -5,6 +5,7 @@ from models.embeddings import get_clients, setup_vector_store, retrieve_context
 from models.llm import get_groq_client, generate_llm_response
 
 def instructions_page():
+    """Displays the instructions page."""
     st.title("Student Handbook RAG Chatbot")
     st.markdown("Welcome! This is a chatbot designed to answer questions about your student handbook.")
     
@@ -19,11 +20,13 @@ def instructions_page():
     """)
 
 def chat_page():
+    """Main page for the RAG chatbot interface."""
     st.title("Christ Handbook Chat")
     st.write("Ask questions about the handbook. The bot learns from new information!")
 
     @st.cache_resource
     def initialize_rag_pipeline():
+        """Initializes all necessary clients and data for the RAG pipeline."""
         with st.spinner("Connecting to services and setting up the pipeline..."):
             handbook_chunks = load_and_chunk_pdf(PDF_PATH)
             cohere_client, pinecone_client = get_clients()
@@ -51,6 +54,7 @@ def chat_page():
 
         with st.chat_message("assistant"):
             context_chunks = retrieve_context(prompt, cohere_client, vector_store)
+            
             response_generator = generate_llm_response(
                 chat_history=st.session_state.messages,
                 context=context_chunks, 
@@ -60,7 +64,7 @@ def chat_page():
                 response_style=response_style
             )
             full_response = st.write_stream(response_generator)
-
+        
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 def main():

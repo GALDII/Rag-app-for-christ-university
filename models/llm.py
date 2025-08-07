@@ -5,6 +5,7 @@ from utils.scraper import perform_web_search
 from models.embeddings import update_vector_store
 
 def get_groq_client():
+    """Initializes and returns the Groq client."""
     try:
         groq_api_key = get_groq_api_key()
         if not groq_api_key:
@@ -16,6 +17,9 @@ def get_groq_client():
         st.stop()
 
 def generate_llm_response(chat_history, context, groq_client, cohere_client, index, response_style="Detailed"):
+    """
+    Generates a direct response as a stream based on a prioritized search strategy.
+    """
     query = chat_history[-1]["content"]
     history_str = "\n".join([f'{msg["role"].title()}: {msg["content"]}' for msg in chat_history[:-1]])
     
@@ -48,8 +52,10 @@ def generate_llm_response(chat_history, context, groq_client, cohere_client, ind
         
         prompt = f"""
         **Instructions:**
-        1. Your answer must be direct and to the point.
-        2. After the answer, add the following "SOURCE NOTE" on a new line.
+        1. Answer the "LATEST QUESTION" based *only* on the provided "CONTEXT".
+        2. Your answer must be direct and to the point.
+        3. Do not add any extra conversational text, apologies, or explanations.
+        4. After the answer, add the following "SOURCE NOTE" on a new line.
 
         **CONTEXT:**
         {context_str}
