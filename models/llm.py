@@ -1,10 +1,10 @@
 from groq import Groq
 import streamlit as st
 from config.config import get_groq_api_key
-# Make sure to import the new web search function
 from utils.scraper import perform_web_search
 
 def get_groq_client():
+    """Initializes and returns the Groq client, handling potential errors."""
     try:
         groq_api_key = get_groq_api_key()
         if not groq_api_key:
@@ -16,10 +16,12 @@ def get_groq_client():
         st.stop()
 
 def generate_llm_response(chat_history, context, groq_client, response_style="Detailed"):
+    """
+    Generates a response from the LLM based on chat history and a multi-layered context retrieval strategy.
+    """
     query = chat_history[-1]["content"]
     history_str = "\n".join([f'{msg["role"].title()}: {msg["content"]}' for msg in chat_history[:-1]])
     
-
     if not context:
         with st.spinner("Couldn't find an answer in the handbook. Searching christuniversity.in..."):
             context = perform_web_search(query, site_specific=True)
@@ -29,11 +31,23 @@ def generate_llm_response(chat_history, context, groq_client, response_style="De
                 context = perform_web_search(query, site_specific=False)
 
     if context:
-        context_str = "\n\n".join(context) if isinstance(context, list) else context
+        if isinstance(context, str):
+            max_chars = 4000
+            if len(context) > max_chars:
+                st.warning(f"Web content was too long, truncating to {max_chars} characters for the LLM.")
+                context_str = context[:max_chars]
+            else:
+                context_str = context
+        else:
+            context_str = "\n\n".join(context)
+        
         prompt = f"""
-        You are an AI assistant. Your task is to answer the user's latest question based on the provided context and the conversation history.
-        The context could be from a student handbook or from a web page.
-        Synthesize the information into a comprehensive answer. If the context is from a webpage, mention the source URL if available.
+        You are a highly skilled information extraction assistant. Your ONLY task is to find the direct and specific answer to the "LATEST QUESTION" using the provided "CONTEXT".
+
+        - Read the "LATEST QUESTION" carefully to understand what specific piece of information is being asked for.
+        - Scrutinize the "CONTEXT" to find the exact answer.
+        - If you find the answer, provide it directly and concisely.
+        - If the "CONTEXT" does not contain the answer, state clearly that you could not find the specific information in the provided text. Do not suggest other ways to find the information.
 
         CONTEXT:
         {context_str}
@@ -44,7 +58,7 @@ def generate_llm_response(chat_history, context, groq_client, response_style="De
         LATEST QUESTION:
         {query}
 
-        DETAILED ANSWER:
+        PRECISE ANSWER:
         """
     else:
         prompt = f"""
@@ -64,7 +78,7 @@ def generate_llm_response(chat_history, context, groq_client, response_style="De
         chat_completion = groq_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama3-8b-8192",
-            temperature=0.5, # A bit of creativity might be needed for web results
+            temperature=0.2, # Lower temperature for more factual extraction
         )
         return chat_completion.choices[0].message.content
     except Exception as e:

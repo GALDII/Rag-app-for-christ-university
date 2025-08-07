@@ -36,7 +36,7 @@ def perform_web_search(query: str, site_specific: bool = False, max_pages: int =
             try:
                 response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
                 response.raise_for_status()
-            
+                
                 soup = BeautifulSoup(response.content, 'html.parser')
                 
                 for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
