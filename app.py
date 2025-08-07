@@ -53,13 +53,7 @@ def chat_page():
         with st.chat_message("assistant"):
             with st.spinner("Searching and generating an answer..."):
                 context_chunks = retrieve_context(prompt, cohere_client, vector_store)
-                
-                answer = generate_llm_response(
-                    st.session_state.messages,
-                    context_chunks, 
-                    groq_client, 
-                    response_style
-                )
+                answer = generate_llm_response(st.session_state.messages,context_chunks, groq_client, response_style)
                 st.markdown(answer)
         
         st.session_state.messages.append({"role": "assistant", "content": answer})

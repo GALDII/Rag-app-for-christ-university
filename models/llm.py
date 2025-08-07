@@ -1,6 +1,7 @@
 from groq import Groq
 import streamlit as st
 from utils.web_search import serpapi_web_search
+from config.config import get_groq_api_key
 
 def get_groq_client():
     try:
