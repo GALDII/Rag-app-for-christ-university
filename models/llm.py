@@ -57,21 +57,38 @@ def generate_llm_response(chat_history, context, groq_client, cohere_client, ind
         else:
             context_str = "\n\n".join(context)
         
-        prompt = f"""
-        **Instructions:**
-        1. Answer the "LATEST QUESTION" based *only* on the provided "CONTEXT".
-        2. Your answer must be direct and to the point.
-        3. Do not add any extra conversational text, apologies, or explanations.
-        4. After the answer, add the following "SOURCE NOTE" on a new line.
+        # *** FIX: Use different prompts based on the response_style toggle ***
+        if response_style == "Concise":
+            prompt = f"""
+            **Instructions:**
+            1. Answer the "LATEST QUESTION" based *only* on the provided "CONTEXT".
+            2. Your answer must be direct, to the point, and concise.
+            3. Do not add any extra conversational text, apologies, or explanations.
+            4. After the answer, add the following "SOURCE NOTE" on a new line.
 
-        **CONTEXT:**
-        {context_str}
-        **LATEST QUESTION:**
-        {query}
-        **SOURCE NOTE:**
-        {source_note}
-        **ANSWER:**
-        """
+            **CONTEXT:**
+            {context_str}
+            **LATEST QUESTION:**
+            {query}
+            **SOURCE NOTE:**
+            {source_note}
+            **CONCISE ANSWER:**
+            """
+        else: # Detailed
+            prompt = f"""
+            **Instructions:**
+            1. You are a helpful AI assistant. Your task is to provide a detailed and comprehensive answer to the "LATEST QUESTION" using the provided "CONTEXT".
+            2. Synthesize the information from the "CONTEXT" into a clear and well-explained response.
+            3. After your detailed answer, add the following "SOURCE NOTE" on a new line.
+
+            **CONTEXT:**
+            {context_str}
+            **LATEST QUESTION:**
+            {query}
+            **SOURCE NOTE:**
+            {source_note}
+            **DETAILED ANSWER:**
+            """
     else:
         # Final fallback: General knowledge
         prompt = f"""
