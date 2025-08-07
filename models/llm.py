@@ -1,6 +1,5 @@
 from groq import Groq
 import streamlit as st
-from config.config import get_groq_api_key
 from utils.web_search import serpapi_web_search
 
 def get_groq_client():
@@ -14,31 +13,41 @@ def get_groq_client():
         st.error(f"Failed to initialize Groq client: {e}")
         st.stop()
 
-def generate_llm_response(query, context, groq_client, response_style="Detailed"):
+def generate_llm_response(chat_history, context, groq_client, response_style="Detailed"):
+    query = chat_history[-1]["content"]
+
+    history_str = "\n".join([f'{msg["role"].title()}: {msg["content"]}' for msg in chat_history[:-1]])
+
     if context:
         context_str = "\n\n".join(context)
         if response_style == "Concise":
             prompt = f"""
-            Based *only* on the following context from the student handbook, answer the user's question in a single, concise sentence.
+            Based *only* on the following context from the student handbook, answer the user's latest question in a single, concise sentence.
 
             CONTEXT:
             {context_str}
 
-            QUESTION:
+            CONVERSATION HISTORY:
+            {history_str}
+
+            LATEST QUESTION:
             {query}
 
             CONCISE ANSWER:
             """
         else:
             prompt = f"""
-            You are a AI assistant. Your primary task is to answer the user's question based on the provided context from the student handbook.
+            You are an AI assistant. Your primary task is to answer the user's latest question based on the provided context from the student handbook and the conversation history.
             If the question can be answered using the context, form your response based on it.
-            If the question is conversational or cannot be answered by the context, answer it using your general knowledge, but give a note like not from the knowledge base.
+            If the question is conversational or cannot be answered by the context, answer it using your general knowledge, but give a note like "This answer is from my general knowledge, not the handbook."
 
             CONTEXT FROM HANDBOOK:
             {context_str}
 
-            QUESTION:
+            CONVERSATION HISTORY:
+            {history_str}
+
+            LATEST QUESTION:
             {query}
 
             DETAILED ANSWER:
@@ -49,39 +58,32 @@ def generate_llm_response(query, context, groq_client, response_style="Detailed"
         
         if not search_results:
             prompt = f"""
-            You are a AI assistant. The user asked a question that could not be found in the student handbook or via web search.
-            Please answer the following question using your general knowledge just give note not from knowledge base.
+            You are an AI assistant. The user asked a question that could not be found in the student handbook or via web search.
+            Please answer the following question using your general knowledge and the conversation history. Note that the answer is not from the knowledge base.
 
+            CONVERSATION HISTORY:
+            {history_str}
+            
             QUESTION:
             {query}
 
             ANSWER:
             """
         else:
-            if response_style == "Concise":
-                prompt = f"""
-                Answer the user's question in one concise sentence based on the following web search results.
+            prompt = f"""
+            You are a helpful research assistant. Answer the user's question based on the following web search results and the conversation history. Synthesize the information into a comprehensive answer.
 
-                SEARCH RESULTS:
-                {search_results}
+            SEARCH RESULTS:
+            {search_results}
 
-                QUESTION:
-                {query}
+            CONVERSATION HISTORY:
+            {history_str}
 
-                CONCISE ANSWER:
-                """
-            else:
-                prompt = f"""
-                You are a helpful research assistant. Answer the user's question in detail based on the following web search results. Synthesize the information into a comprehensive answer and cite the links provided.
+            QUESTION:
+            {query}
 
-                SEARCH RESULTS:
-                {search_results}
-
-                QUESTION:
-                {query}
-
-                DETAILED ANSWER:
-                """
+            ANSWER:
+            """
 
     try:
         chat_completion = groq_client.chat.completions.create(

@@ -14,14 +14,13 @@ def instructions_page():
     1.  The student handbook has been pre-loaded into a **Pinecone** vector database.
     2.  Navigate to the **Chat** page using the sidebar.
     3.  Ask any question related to the handbook (e.g., "What is the policy on academic integrity?").
-    4.  The chatbot will retrieve relevant sections from the handbook and generate an answer.
+    4.  You can ask follow-up questions like "What are the penalties?" and the chatbot will understand the context.
     5.  If you ask a general question not covered in the handbook, the chatbot will use its general knowledge to answer.
     """)
 
 def chat_page():
-    """Main page for the RAG chatbot interface."""
     st.title("Christ Handbook Chat")
-    st.write("Ask questions about the handbook")
+    st.write("Ask questions about the handbook. You can ask follow-up questions too!")
 
     @st.cache_resource
     def initialize_rag_pipeline():
@@ -38,6 +37,7 @@ def chat_page():
     response_style_toggle = st.toggle("Get Detailed Answers", value=True)
     response_style = "Detailed" if response_style_toggle else "Concise"
 
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -51,9 +51,15 @@ def chat_page():
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Searching and generating an answer"):
+            with st.spinner("Searching and generating an answer..."):
                 context_chunks = retrieve_context(prompt, cohere_client, vector_store)
-                answer = generate_llm_response(prompt, context_chunks, groq_client, response_style)
+                
+                answer = generate_llm_response(
+                    st.session_state.messages,
+                    context_chunks, 
+                    groq_client, 
+                    response_style
+                )
                 st.markdown(answer)
         
         st.session_state.messages.append({"role": "assistant", "content": answer})
@@ -62,15 +68,14 @@ def chat_page():
             with st.expander("Show sources from the db"):
                 for i, text in enumerate(context_chunks):
                     st.info(f"Source {i+1}:\n\n{text}")
-        
+
         st.rerun()
 
 
 def main():
-    """Main function to run the Streamlit app with multi-page navigation."""
     st.set_page_config(
         page_title="Handbook RAG Chat",
-        page_icon="�",
+        page_icon="📚",
         layout="wide",
         initial_sidebar_state="expanded"
     )
