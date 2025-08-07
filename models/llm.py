@@ -24,26 +24,23 @@ def generate_llm_response(chat_history, context, groq_client, cohere_client, ind
     history_str = "\n".join([f'{msg["role"].title()}: {msg["content"]}' for msg in chat_history[:-1]])
     
     source_note = ""
-    is_web_search = False
 
     # If context from the handbook is not found, start the web search process.
     if not context:
         # First, try searching the university website
         site_context = perform_web_search(query, site_specific=True)
         
-        # If found on the university site, update the DB and set context
+        # If relevant info is found on the university site, update the DB and use it
         if site_context:
             update_vector_store(site_context, cohere_client, index)
             context = site_context
             source_note = "Source: christuniversity.in"
-            is_web_search = True
-        # If not found on the site, then perform a general web search
+        # If not, perform a general web search
         else:
             general_web_context = perform_web_search(query, site_specific=False)
             if general_web_context:
                 context = general_web_context
                 source_note = "Source: Web Search"
-                is_web_search = True
 
     # If context was from the original DB, set the source note.
     elif context:
@@ -57,7 +54,6 @@ def generate_llm_response(chat_history, context, groq_client, cohere_client, ind
         else:
             context_str = "\n\n".join(context)
         
-        # *** FIX: Use different prompts based on the response_style toggle ***
         if response_style == "Concise":
             prompt = f"""
             **Instructions:**
