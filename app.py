@@ -5,7 +5,6 @@ from models.embeddings import get_clients, setup_vector_store, retrieve_context
 from models.llm import get_groq_client, generate_llm_response
 
 def instructions_page():
-    """Displays the instructions page."""
     st.title("Student Handbook RAG Chatbot")
     st.markdown("Welcome! This is a chatbot designed to answer questions about your student handbook.")
     
@@ -20,14 +19,11 @@ def instructions_page():
     """)
 
 def chat_page():
-    """Main page for the RAG chatbot interface."""
     st.title("Christ Handbook Chat")
     st.write("Ask questions about the handbook. The bot learns from new information!")
 
     @st.cache_resource
     def initialize_rag_pipeline():
-        """Initializes all necessary clients and data for the RAG pipeline."""
-        # This spinner runs only once on the first load
         with st.spinner("Connecting to services and setting up the pipeline..."):
             handbook_chunks = load_and_chunk_pdf(PDF_PATH)
             cohere_client, pinecone_client = get_clients()
@@ -54,10 +50,8 @@ def chat_page():
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            # The spinner is removed from here for a cleaner UI on every query
             context_chunks = retrieve_context(prompt, cohere_client, vector_store)
-            
-            answer = generate_llm_response(
+            response_generator = generate_llm_response(
                 chat_history=st.session_state.messages,
                 context=context_chunks, 
                 groq_client=groq_client, 
@@ -65,17 +59,9 @@ def chat_page():
                 index=vector_store,
                 response_style=response_style
             )
-            st.markdown(answer)
-        
-        st.session_state.messages.append({"role": "assistant", "content": answer})
-        
-        # This expander is useful for debugging but can be commented out for production
-        if context_chunks:
-            with st.expander("Show initial sources from DB"):
-                for i, text in enumerate(context_chunks):
-                    st.info(f"Source {i+1}:\n\n{text}")
-        
-        st.rerun()
+            full_response = st.write_stream(response_generator)
+
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 def main():
     """Main function to run the Streamlit app with multi-page navigation."""
