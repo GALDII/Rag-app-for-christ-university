@@ -62,7 +62,8 @@ def retrieve_context(query, cohere_client, index, n_results=5):
         query_embedding = response.embeddings[0]
         results = index.query(vector=query_embedding, top_k=n_results, include_metadata=True)
         
-        similarity_threshold = 0.45
+        # *** FIX: Increased threshold to prevent false positives ***
+        similarity_threshold = 0.5
         
         filtered_matches = [match for match in results['matches'] if match['score'] > similarity_threshold]
         if not filtered_matches:
