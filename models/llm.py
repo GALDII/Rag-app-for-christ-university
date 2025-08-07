@@ -5,10 +5,11 @@ from utils.scraper import perform_web_search
 from models.embeddings import update_vector_store
 
 def get_groq_client():
+    """Initializes and returns the Groq client."""
     try:
         groq_api_key = get_groq_api_key()
         if not groq_api_key:
-            st.error("Groq API key not found. Please check your configuration.")
+            st.error("Groq API key not found.")
             st.stop()
         return Groq(api_key=groq_api_key)
     except Exception as e:
@@ -16,20 +17,35 @@ def get_groq_client():
         st.stop()
 
 def generate_llm_response(chat_history, context, groq_client, cohere_client, index, response_style="Detailed"):
+    """
+    Generates a direct response based on a prioritized search strategy.
+    """
     query = chat_history[-1]["content"]
     history_str = "\n".join([f'{msg["role"].title()}: {msg["content"]}' for msg in chat_history[:-1]])
     
-    if not context:
-        with st.spinner("Couldn't find an answer in the handbook. Searching christuniversity.in..."):
-            site_context = perform_web_search(query, site_specific=True)
+    source_note = ""
+    is_web_search = False
 
+    # If context from the handbook is not found, start the fallback search.
+    if not context:
+        site_context = perform_web_search(query, site_specific=True)
         if site_context:
             update_vector_store(site_context, cohere_client, index)
             context = site_context
+            source_note = "Source: christuniversity.in"
+            is_web_search = True
         else:
-            with st.spinner("No relevant info on the university site. Performing a general web search..."):
-                context = perform_web_search(query, site_specific=False)
+            general_web_context = perform_web_search(query, site_specific=False)
+            if general_web_context:
+                context = general_web_context
+                source_note = "Source: Web Search"
+                is_web_search = True
 
+    # If context was from the original DB, set the source note.
+    if context and not is_web_search:
+        source_note = "Source: Student Handbook"
+
+    # Build the final prompt based on whether context was found.
     if context:
         if isinstance(context, str):
             max_chars = 4000
@@ -38,42 +54,42 @@ def generate_llm_response(chat_history, context, groq_client, cohere_client, ind
             context_str = "\n\n".join(context)
         
         prompt = f"""
-        You are a highly skilled information extraction assistant. Your ONLY task is to find the direct and specific answer to the "LATEST QUESTION" using the provided "CONTEXT".
-        - Read the "LATEST QUESTION" carefully.
-        - Scrutinize the "CONTEXT" to find the exact answer.
-        - If you find the answer, provide it directly and concisely.
-        - If the "CONTEXT" does not contain the answer, state clearly that you could not find the specific information in the provided text.
+        **Instructions:**
+        1. Answer the "LATEST QUESTION" based *only* on the provided "CONTEXT".
+        2. Your answer must be direct and to the point.
+        3. Do not add any extra conversational text, apologies, or explanations.
+        4. After the answer, add the following "SOURCE NOTE" on a new line.
 
-        CONTEXT:
+        **CONTEXT:**
         {context_str}
 
-        CONVERSATION HISTORY:
-        {history_str}
-
-        LATEST QUESTION:
+        **LATEST QUESTION:**
         {query}
+        
+        **SOURCE NOTE:**
+        {source_note}
 
-        PRECISE ANSWER:
+        **ANSWER:**
         """
     else:
+        # Final fallback: General knowledge
         prompt = f"""
-        You are an AI assistant. The user asked a question that could not be answered from the student handbook or any web search.
-        Please answer using your general knowledge, and state that the information is not from an official source.
-
-        CONVERSATION HISTORY:
-        {history_str}
+        **Instructions:**
+        1. Answer the "LATEST QUESTION" using your general knowledge.
+        2. Your answer must be direct and to the point.
+        3. After the answer, add "Source: General Knowledge" on a new line.
         
-        QUESTION:
+        **LATEST QUESTION:**
         {query}
 
-        ANSWER (from general knowledge):
+        **ANSWER:**
         """
 
     try:
         chat_completion = groq_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama3-8b-8192",
-            temperature=0.2,
+            temperature=0.1, # Keep temperature low for factual, direct answers
         )
         return chat_completion.choices[0].message.content
     except Exception as e:

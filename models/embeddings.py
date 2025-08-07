@@ -9,9 +9,6 @@ from config.config import (
     PINECONE_INDEX_NAME
 )
 
-# ... (get_clients, setup_vector_store, retrieve_context functions remain the same) ...
-# (Make sure they are still in your file, they are omitted here for brevity)
-
 def get_clients():
     try:
         ssl._create_default_https_context = ssl._create_unverified_context
@@ -37,9 +34,7 @@ def get_clients():
 def setup_vector_store(chunks, cohere_client, pinecone_client):
     try:
         if PINECONE_INDEX_NAME not in pinecone_client.list_indexes().names():
-            st.info(f"Creating Pinecone index '{PINECONE_INDEX_NAME}'...")
             pinecone_client.create_index(name=PINECONE_INDEX_NAME, dimension=1024, metric='cosine')
-            st.success("Index created successfully!")
 
         index = pinecone_client.Index(PINECONE_INDEX_NAME)
     except Exception as e:
@@ -49,23 +44,16 @@ def setup_vector_store(chunks, cohere_client, pinecone_client):
     if index.describe_index_stats()['total_vector_count'] == 0:
         with st.spinner("Embedding handbook... This is a one-time setup."):
             batch_size = 96
-            total_batches = (len(chunks) + batch_size - 1) // batch_size
-            my_bar = st.progress(0, text="Embedding handbook. Please wait.")
             for i in range(0, len(chunks), batch_size):
                 batch_chunks = chunks[i:i + batch_size]
-                current_batch_num = (i // batch_size) + 1
                 try:
                     response = cohere_client.embed(texts=batch_chunks, model='embed-english-v3.0', input_type='search_document')
                     embeddings = response.embeddings
                     vectors_to_upsert = [{"id": str(i + j), "values": embedding, "metadata": {"text": chunk}} for j, (chunk, embedding) in enumerate(zip(batch_chunks, embeddings))]
                     index.upsert(vectors=vectors_to_upsert)
-                    my_bar.progress(min(current_batch_num / total_batches, 1.0), text=f"Processed batch {current_batch_num}/{total_batches}")
                 except Exception as e:
-                    st.error(f"An error occurred during embedding batch {current_batch_num}: {e}")
-                    my_bar.empty()
+                    st.error(f"An error occurred during embedding: {e}")
                     st.stop()
-            my_bar.empty()
-            st.success("Handbook embedded successfully!")
     return index
 
 def retrieve_context(query, cohere_client, index, n_results=5):
@@ -80,28 +68,21 @@ def retrieve_context(query, cohere_client, index, n_results=5):
         context = [match['metadata']['text'] for match in filtered_matches]
         return context
     except Exception as e:
-        st.error(f"Failed to retrieve context from the vector store: {e}")
+        st.error(f"Failed to retrieve context: {e}")
         return []
 
-# *** NEW: Function to update the Pinecone index with new info ***
 def update_vector_store(new_text: str, cohere_client, index):
-    """
-    Chunks new text, embeds it, and upserts it into the Pinecone index.
-    """
+    """Chunks new text, embeds it, and upserts it into the Pinecone index."""
     try:
         st.info("New information found. Updating knowledge base...")
         
-        # Simple chunking by paragraph. You can use a more sophisticated chunker if needed.
         chunks = [p.strip() for p in new_text.split('\n\n') if p.strip() and len(p) > 50]
         if not chunks:
-            st.warning("Scraped text was empty or too short after chunking. Skipping update.")
             return
 
-        # Get current vector count to create unique IDs and avoid collisions
         current_stats = index.describe_index_stats()
         base_id = current_stats.get('total_vector_count', 0)
 
-        # Embed and upsert in batches
         batch_size = 96
         for i in range(0, len(chunks), batch_size):
             batch_chunks = chunks[i:i + batch_size]

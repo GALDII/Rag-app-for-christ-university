@@ -11,12 +11,12 @@ def instructions_page():
     
     st.markdown("""
     ---
-    ## 📝 How to Use
-    1.  The student handbook has been pre-loaded into a **Pinecone** vector database.
-    2.  Navigate to the **Chat** page using the sidebar.
-    3.  Ask any question. The bot will first search the handbook.
-    4.  If the answer isn't in the handbook, it will search the official university website.
-    5.  **New Feature:** If it finds a useful answer on the website, it will automatically add that information to its knowledge base for future questions!
+    ## 📝 How it Works
+    1.  Ask any question. The bot will first search its internal knowledge base (the student handbook).
+    2.  If the answer isn't found, it will automatically search the official **christuniversity.in** website.
+    3.  If new information is found on the website, it's added to the knowledge base to make the bot smarter for future questions.
+    4.  If no information is found on the university site, it will perform a general web search as a last resort.
+    5.  Each answer includes a note indicating the source of the information.
     """)
 
 def chat_page():
@@ -27,6 +27,7 @@ def chat_page():
     @st.cache_resource
     def initialize_rag_pipeline():
         """Initializes all necessary clients and data for the RAG pipeline."""
+        # This spinner runs only once on the first load
         with st.spinner("Connecting to services and setting up the pipeline..."):
             handbook_chunks = load_and_chunk_pdf(PDF_PATH)
             cohere_client, pinecone_client = get_clients()
@@ -53,15 +54,24 @@ def chat_page():
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Searching and generating an answer..."):
-                context_chunks = retrieve_context(prompt, cohere_client, vector_store)
-                answer = generate_llm_response(chat_history=st.session_state.messages, context=context_chunks, groq_client=groq_client, cohere_client=cohere_client,index=vector_store,response_style=response_style)
-                st.markdown(answer)
+            # The spinner is removed from here for a cleaner UI on every query
+            context_chunks = retrieve_context(prompt, cohere_client, vector_store)
+            
+            answer = generate_llm_response(
+                chat_history=st.session_state.messages,
+                context=context_chunks, 
+                groq_client=groq_client, 
+                cohere_client=cohere_client,
+                index=vector_store,
+                response_style=response_style
+            )
+            st.markdown(answer)
         
         st.session_state.messages.append({"role": "assistant", "content": answer})
         
+        # This expander is useful for debugging but can be commented out for production
         if context_chunks:
-            with st.expander("Show sources from the db"):
+            with st.expander("Show initial sources from DB"):
                 for i, text in enumerate(context_chunks):
                     st.info(f"Source {i+1}:\n\n{text}")
         
