@@ -62,7 +62,6 @@ def retrieve_context(query, cohere_client, index, n_results=5):
         query_embedding = response.embeddings[0]
         results = index.query(vector=query_embedding, top_k=n_results, include_metadata=True)
         
-        # *** FIX: Increased threshold to prevent false positives ***
         similarity_threshold = 0.5
         
         filtered_matches = [match for match in results['matches'] if match['score'] > similarity_threshold]
@@ -75,20 +74,44 @@ def retrieve_context(query, cohere_client, index, n_results=5):
         return []
 
 def update_vector_store(new_text: str, cohere_client, index):
-    """Chunks new text, embeds it, and upserts it into the Pinecone index."""
+    """
+    Chunks new text, embeds it, and upserts it into the Pinecone index,
+    ensuring no chunk exceeds the metadata size limit.
+    """
     try:
         st.info("New information found. Updating knowledge base...")
         
-        chunks = [p.strip() for p in new_text.split('\n\n') if p.strip() and len(p) > 50]
-        if not chunks:
+        initial_chunks = [p.strip() for p in new_text.split('\n\n') if p.strip()]
+        final_chunks = []
+        max_chunk_size = 38000 
+
+        for chunk in initial_chunks:
+            if len(chunk.encode('utf-8')) > max_chunk_size:
+                sub_chunks = []
+                current_sub_chunk = ""
+                sentences = chunk.replace('. ', '.\n').split('\n')
+                for sentence in sentences:
+                    if len(current_sub_chunk.encode('utf-8')) + len(sentence.encode('utf-8')) + 1 < max_chunk_size:
+                        current_sub_chunk += sentence + " "
+                    else:
+                        sub_chunks.append(current_sub_chunk.strip())
+                        current_sub_chunk = sentence + " "
+                if current_sub_chunk:
+                    sub_chunks.append(current_sub_chunk.strip())
+                final_chunks.extend(sub_chunks)
+            else:
+                final_chunks.append(chunk)
+
+        if not final_chunks:
+            st.warning("Scraped text was empty after chunking. Skipping update.")
             return
 
         current_stats = index.describe_index_stats()
         base_id = current_stats.get('total_vector_count', 0)
 
         batch_size = 96
-        for i in range(0, len(chunks), batch_size):
-            batch_chunks = chunks[i:i + batch_size]
+        for i in range(0, len(final_chunks), batch_size):
+            batch_chunks = final_chunks[i:i + batch_size]
             response = cohere_client.embed(
                 texts=batch_chunks, model='embed-english-v3.0', input_type='search_document'
             )
